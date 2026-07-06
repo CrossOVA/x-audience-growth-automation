@@ -1,0 +1,712 @@
+{
+  "name": "X API Audience Growth Automation + Content Factory Starter",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://api.twitter.com/2/tweets/search/recent",
+        "authentication": "predefinedCredentialType",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.query }}"
+            },
+            {
+              "name": "max_results",
+              "value": "10"
+            },
+            {
+              "name": "expansions",
+              "value": "author_id,referenced_tweets.id"
+            },
+            {
+              "name": "user.fields",
+              "value": "public_metrics"
+            },
+            {
+              "name": "tweet.fields",
+              "value": "text,created_at"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -288,
+        272
+      ],
+      "id": "19128a55-3fc4-4a31-af3a-4d7c4be296fc",
+      "name": "Search Fresh Replies",
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "ehIH7RqB2FuzAVk9",
+          "name": "X account OAuth2 API (Main App)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        928,
+        256
+      ],
+      "id": "5826a423-7547-4043-9e2f-e85f016dd369",
+      "name": "Process One by One"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.need_like }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1360,
+        272
+      ],
+      "id": "b3a1b7da-2824-46d8-94c6-12d9cc192906",
+      "name": "If Need Like"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twitter.com/2/users/<X_USER_ID>/following",
+        "authentication": "predefinedCredentialType",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "target_user_id",
+              "value": "={{ $('Process One by One').item.json.target_user_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1760,
+        288
+      ],
+      "id": "515fbe7a-2730-4151-b177-cb4c36ce46ce",
+      "name": "Follow via X API",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "ehIH7RqB2FuzAVk9",
+          "name": "X account OAuth2 API (Main App)"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "triggerAtMinute": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1232,
+        272
+      ],
+      "id": "10dbdd29-9359-4f18-874c-98182d1495c0",
+      "name": "Run Every Hour"
+    },
+    {
+      "parameters": {
+        "jsCode": "const delaySeconds = Math.floor(Math.random() * 181);\nreturn [{ json: { delaySeconds } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        272
+      ],
+      "id": "91d9f673-b335-4c15-9465-ed9204a9d622",
+      "name": "Random Delay"
+    },
+    {
+      "parameters": {
+        "amount": "={{ $json.delaySeconds }}"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -736,
+        272
+      ],
+      "id": "b2777c68-3476-490a-9da2-ed9e749b01f9",
+      "name": "Wait Random Time",
+      "webhookId": "7de5a2f5-8db6-4a9e-bdc9-7d065199306e"
+    },
+    {
+      "parameters": {
+        "jsCode": "const users = $('Search Fresh Replies').item.json.includes?.users || [];\n\nconst ids = [...new Set(\n  users\n    .map(u => String(u.id || '').trim())\n    .filter(Boolean)\n)];\n\nconst idsFilter = ids.length ? `in.(${ids.join(',')})` : 'in.(0)';\n\nreturn [\n  {\n    json: {\n      ids_filter: idsFilter,\n      today_start: $now.startOf('day').toFormat(\"yyyy-MM-dd'T'HH:mm:ss\"),\n      tomorrow_start: $now.plus({ days: 1 }).startOf('day').toFormat(\"yyyy-MM-dd'T'HH:mm:ss\")\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        256
+      ],
+      "id": "6d81f597-7e97-469d-b43f-11f54042f2b5",
+      "name": "Build SQL Lookup Params"
+    },
+    {
+      "parameters": {
+        "url": "https://<SUPABASE_PROJECT>.supabase.co/rest/v1/social_profile_log",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "target_user_id"
+            },
+            {
+              "name": "target_user_id",
+              "value": "={{ $('Build SQL Lookup Params').item.json.ids_filter }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "<SUPABASE_API_KEY>"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer <SUPABASE_API_KEY>"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        176,
+        256
+      ],
+      "id": "d26cdf27-efa5-4fb3-8e4b-824157aa7ee4",
+      "name": "Get Already Followed Users SQL",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "https://<SUPABASE_PROJECT>.supabase.co/rest/v1/social_profile_log",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "target_user_id,Like_Sent,Follow_Date"
+            },
+            {
+              "name": "Like_Sent",
+              "value": "eq.Yes"
+            },
+            {
+              "name": "Follow_Date",
+              "value": "={{ 'gte.' + $('Build SQL Lookup Params').item.json.today_start }}"
+            },
+            {
+              "name": "Follow_Date",
+              "value": "={{ 'lt.' + $('Build SQL Lookup Params').item.json.tomorrow_start }}"
+            },
+            {
+              "name": "limit",
+              "value": "1000"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "<SUPABASE_API_KEY>"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer <SUPABASE_API_KEY>"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        384,
+        256
+      ],
+      "id": "9f1f9770-d648-4556-ad4d-bc4d61a6b550",
+      "name": "Get Today Likes SQL",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const today = $now.toFormat('yyyy-MM-dd');\n\nconst tweets = $('Search Fresh Replies').item.json.data || [];\nconst users = $('Search Fresh Replies').item.json.includes?.users || [];\n\nfunction rowsFromNode(nodeName) {\n  const items = $(nodeName).all() || [];\n\n  if (!items.length) return [];\n\n  const first = items[0].json;\n\n  if (Array.isArray(first)) {\n    return first;\n  }\n\n  return items\n    .map(item => item.json)\n    .filter(row => row && Object.keys(row).length > 0 && !row.error);\n}\n\nconst knownRows = rowsFromNode('Get Already Followed Users SQL');\nconst todayLikeRows = rowsFromNode('Get Today Likes SQL');\n\nconst knownIds = new Set(\n  knownRows\n    .map(row => String(row.target_user_id || '').trim())\n    .filter(Boolean)\n);\n\nlet botLikesToday = 0;\n\ntry {\n  botLikesToday = todayLikeRows.filter(row => {\n    const likeSent = String(row.Like_Sent || '').trim().toLowerCase() === 'yes';\n    const followDate = String(row.Follow_Date || '').trim();\n\n    return likeSent && followDate.startsWith(today);\n  }).length;\n} catch (e) {\n  botLikesToday = 0;\n}\n\nconst SAFE_BOT_LIMIT = 180;\nlet currentTotalLikes = botLikesToday;\n\nconst validUsers = users.filter(u => {\n  const canFollow = (u.public_metrics?.following_count || 0) < 4995;\n  const isNew = !knownIds.has(String(u.id));\n  return canFollow && isNew;\n});\n\nlet tier1 = validUsers.filter(u => {\n  const fers = u.public_metrics?.followers_count || 0;\n  const fing = u.public_metrics?.following_count || 0;\n  return fers >= 5 && fers <= 3500 && fing >= (fers * 0.9);\n});\n\nlet tier2 = validUsers.filter(u => {\n  const fers = u.public_metrics?.followers_count || 0;\n  const fing = u.public_metrics?.following_count || 0;\n  const notInTier1 = !tier1.find(t1 => t1.id === u.id);\n  return notInTier1 && fing >= (fers * 0.3) && fers < 10000;\n});\n\nconst sortByHunger = (a, b) => {\n  const ratioA = (a.public_metrics?.following_count || 0) / ((a.public_metrics?.followers_count || 0) || 1);\n  const ratioB = (b.public_metrics?.following_count || 0) / ((b.public_metrics?.followers_count || 0) || 1);\n  return ratioB - ratioA;\n};\n\ntier1.sort(sortByHunger);\ntier2.sort(sortByHunger);\n\nconst finalTargets = [...tier1, ...tier2];\n\nreturn finalTargets.map((t) => {\n  const userTweet = tweets.find(tw => tw.author_id === t.id);\n  const ratio = (t.public_metrics?.following_count || 0) / ((t.public_metrics?.followers_count || 0) || 1);\n\n  let willLike = false;\n  const isGolden = ratio >= 0.3 && ratio <= 1.5;\n  const hasBudget = currentTotalLikes < SAFE_BOT_LIMIT;\n\n  if (userTweet && isGolden && hasBudget) {\n    willLike = true;\n    currentTotalLikes++;\n  }\n\n  return {\n    json: {\n      target_user_id: t.id,\n      username: t.username,\n      tweet_id: userTweet ? userTweet.id : null,\n      tier: tier1.find(t1 => t1.id === t.id) ? 'Tier 1' : 'Tier 2',\n      followers: t.public_metrics?.followers_count || 0,\n      following: t.public_metrics?.following_count || 0,\n      need_like: willLike\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        256
+      ],
+      "id": "931ddd9f-33c3-4ff1-a2e1-a34f39257bde",
+      "name": "Filter & Sort Targets SQL"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://<SUPABASE_PROJECT>.supabase.co/rest/v1/social_profile_log",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "<SUPABASE_API_KEY>"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer <SUPABASE_API_KEY>"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        2288,
+        272
+      ],
+      "id": "ad7d3293-1d72-4765-87b6-645b22d980fb",
+      "name": "Log to Tracker SQL"
+    },
+    {
+      "parameters": {
+        "jsCode": "const target = $('Process One by One').item.json;\n\nreturn [\n  {\n    json: {\n      target_user_id: String(target.target_user_id || '').trim(),\n      username: target.username || '',\n      tier: target.tier || '',\n      Status: 'Followed',\n      Like_Sent: target.need_like ? 'Yes' : 'No',\n      Follow_Date: $now.toFormat('yyyy-MM-dd HH:mm:ss'),\n      Unfollow_Date: null\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        272
+      ],
+      "id": "203d7597-a049-487a-88d8-fe7a5968198f",
+      "name": "Build Tracker Insert Body SQL"
+    },
+    {
+      "parameters": {
+        "jsCode": "const pools = [\n  \"(to:NEWS_ACCOUNT_1 OR to:NEWS_ACCOUNT_2 OR to:INDUSTRY_ACCOUNT_1 OR to:INDUSTRY_ACCOUNT_2) is:reply -is:retweet\",\n  \"(to:INFLUENCER_ACCOUNT_1 OR to:INFLUENCER_ACCOUNT_2 OR to:ANALYST_ACCOUNT_1 OR to:ANALYST_ACCOUNT_2) is:reply -is:retweet\",\n  \"(to:FOUNDER_ACCOUNT_1 OR to:ETF_ANALYST_ACCOUNT OR to:PROJECT_ACCOUNT_1 OR to:MARKET_ACCOUNT_1) is:reply -is:retweet\"\n];\n\nconst randomIndex = Math.floor(Math.random() * pools.length);\n\nreturn [{\n  json: {\n    query: pools[randomIndex],\n    pool_index: randomIndex + 1\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        272
+      ],
+      "id": "03bf56ad-6b86-4768-9159-32d95f8bd137",
+      "name": "Select Target Pool"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.twitter.com/2/users/<X_USER_ID>/likes",
+        "authentication": "predefinedCredentialType",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tweet_id",
+              "value": "={{ $json.tweet_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1552,
+        144
+      ],
+      "id": "d70db52b-6e92-469a-a0bc-14aab958ede7",
+      "name": "Like via X API",
+      "credentials": {
+        "twitterOAuth2Api": {
+          "id": "ehIH7RqB2FuzAVk9",
+          "name": "X account OAuth2 API (Main App)"
+        }
+      },
+      "continueOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.floor(Math.random() * (300 - 185 + 1)) + 185 }}"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1152,
+        272
+      ],
+      "id": "c4811a4c-1501-450a-b3c8-ae45b3f2308b",
+      "name": "Rate Limit Pause",
+      "webhookId": "036e9c61-9c70-4cd7-97ba-7a3158c9996d"
+    },
+    {
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=Поток {{ $workflow.name }}.\n\nОшибка в Search Fresh Replies",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        464
+      ],
+      "id": "e86436b5-fcfc-476a-9441-5ea71b04951d",
+      "name": "Telegram Alert: Search Failed",
+      "webhookId": "f3fd7cbe-bf2e-44a0-b054-38f14df4e63e",
+      "credentials": {
+        "telegramApi": {
+          "id": "7sX2yrucrmBdFFtS",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "<TELEGRAM_CHAT_ID>",
+        "text": "=Поток {{ $workflow.name }}.\n\nОшибка на этапе обработки выбранного профиля.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2080,
+        512
+      ],
+      "id": "fd8198c4-3a11-4c09-ba3d-fe650d3edf81",
+      "name": "Telegram Alert: Following Failed",
+      "webhookId": "cedc8892-0524-4b69-b5b5-fdbe692e915d",
+      "credentials": {
+        "telegramApi": {
+          "id": "7sX2yrucrmBdFFtS",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "Main AI Content Factory Orchestrator",
+          "mode": "id",
+          "cachedResultUrl": "/workflow/Main%20AI%20Content%20Factory%20Orchestrator"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "4b51627d-e639-4cd6-867f-d30a6a1e06c1",
+      "name": "Call Main AI Content Factory Orchestrator",
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Search Fresh Replies": {
+      "main": [
+        [
+          {
+            "node": "Call Main AI Content Factory Orchestrator",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build SQL Lookup Params",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Alert: Search Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process One by One": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Rate Limit Pause",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Need Like": {
+      "main": [
+        [
+          {
+            "node": "Like via X API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Follow via X API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow via X API": {
+      "main": [
+        [
+          {
+            "node": "Build Tracker Insert Body SQL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Alert: Following Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Random Delay",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Random Delay": {
+      "main": [
+        [
+          {
+            "node": "Wait Random Time",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Random Time": {
+      "main": [
+        [
+          {
+            "node": "Select Target Pool",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build SQL Lookup Params": {
+      "main": [
+        [
+          {
+            "node": "Get Already Followed Users SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Already Followed Users SQL": {
+      "main": [
+        [
+          {
+            "node": "Get Today Likes SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Today Likes SQL": {
+      "main": [
+        [
+          {
+            "node": "Filter & Sort Targets SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter & Sort Targets SQL": {
+      "main": [
+        [
+          {
+            "node": "Process One by One",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log to Tracker SQL": {
+      "main": [
+        [
+          {
+            "node": "Process One by One",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Tracker Insert Body SQL": {
+      "main": [
+        [
+          {
+            "node": "Log to Tracker SQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Target Pool": {
+      "main": [
+        [
+          {
+            "node": "Search Fresh Replies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Like via X API": {
+      "main": [
+        [
+          {
+            "node": "Follow via X API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate Limit Pause": {
+      "main": [
+        [
+          {
+            "node": "If Need Like",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "372aa705-39c5-45d3-a5ca-2793e82d4a4a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4ca2686d682bbda7f7ca89577ac50014ee569eaa31e678c39d435a26dec4cf59"
+  },
+  "id": "JZzaT7K4ag6ZgHlk",
+  "tags": [
+    {
+      "updatedAt": "2025-10-24T08:54:18.240Z",
+      "createdAt": "2025-10-24T08:54:18.240Z",
+      "id": "bDmErdQqXSBWy24w",
+      "name": "Cryptogeek"
+    },
+    {
+      "updatedAt": "2026-04-06T07:12:05.263Z",
+      "createdAt": "2026-04-06T07:12:05.263Z",
+      "id": "qjqTMhzbeCaVUOep",
+      "name": "MainWF"
+    },
+    {
+      "updatedAt": "2025-10-29T10:43:21.936Z",
+      "createdAt": "2025-10-29T10:43:21.936Z",
+      "id": "vrzXppwTL7dYmLNx",
+      "name": "Production"
+    }
+  ]
+}
